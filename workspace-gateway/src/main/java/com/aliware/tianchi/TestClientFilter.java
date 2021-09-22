@@ -30,8 +30,6 @@ public class TestClientFilter implements Filter, BaseFilter.Listener {
 
     @Override
     public void onResponse(Result appResponse, Invoker<?> invoker, Invocation invocation) {
-        String value = appResponse.getAttachment("TestKey");
-        System.out.println("TestKey From Filter, value: " + value);
     }
 
     @Override

@@ -12,11 +12,15 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.AbstractQueuedSynchronizer;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -41,13 +45,11 @@ public class Window {
 		this.starts = new HashMap<>();
 	}
 
-	private static final int maxBulkSize = 10;
-	private static final int pushWindowSize = 3;
-
 	private static final AtomicInteger serial = new AtomicInteger();
 	private final TreeMap<Integer, Digest> tracking;
 	private final Map<Integer, OffsetDateTime> starts;
 	private final ReadWriteLock lock;
+	private final AtomicBoolean ready = new AtomicBoolean(false);
 
 	public Request start(Invocation inv, OffsetDateTime start) {
 		int seq = serial.incrementAndGet();
@@ -59,6 +61,11 @@ public class Window {
 		this.starts.put(seq, start);
 		this.tracking.put(digest.getSeq(), digest);
 		this.lock.writeLock().unlock();
+
+		synchronized (this) {
+			ready.set(true);
+			this.notifyAll();
+		}
 		return req;
 	}
 
@@ -136,14 +143,30 @@ public class Window {
 		this.lock.readLock().lock();
 		try {
 			Set<Integer> pending = new HashSet<>(this.tracking.keySet());
-			return new Snapshot(
+			Snapshot snapshot = new Snapshot(
 				false,
 				this.leftSeq(),
 				this.rightSeq(),
-				new TreeMap<>());
+				new TreeMap<>(this.tracking));
+			return snapshot;
 		}
 		finally {
 			this.lock.readLock().unlock();
+		}
+	}
+
+	public void waitUntilReady() {
+		synchronized (this) {
+			if (this.ready.compareAndSet(true, false)) {
+				return;
+			}
+			try {
+				this.wait();
+				waitUntilReady();
+			}
+			catch (InterruptedException e) {
+				log.info("WAIT ABORT");
+			}
 		}
 	}
 
@@ -184,23 +207,8 @@ public class Window {
 			return new Digest[] {this.pendings.get(left)};
 		}
 
-		public Digest[] getRecalls(int seq, int idx, int total) {
-			List<Digest> bulk = new ArrayList<>();
-			Integer runner = seq;
-			for (int i = 0; i < maxBulkSize; i++) {
-				runner = this.pendings.lowerKey(runner);
-				if (runner == null) {
-					break;
-				}
-				if (runner % total != idx) {
-					continue;
-				}
-				Digest digest = this.pendings.get(runner);
-				if (digest != null) {
-					bulk.add(digest);
-				}
-			}
-			return bulk.toArray(new Digest[0]);
+		public Digest[] getRecalls() {
+			return this.pendings.values().stream().toArray(Digest[]::new);
 		}
 
 		public Digest get(int seq) {

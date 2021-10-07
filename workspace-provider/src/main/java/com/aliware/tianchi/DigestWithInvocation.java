@@ -6,10 +6,6 @@ import org.apache.dubbo.rpc.Invoker;
 
 public class DigestWithInvocation extends Digest {
 
-	public static final int PRIORITY_MANDATORY = 0;
-	public static final int PRIORITY_SHARD = 5;
-	public static final int PRIORITY_OTHER = 10;
-
 	public DigestWithInvocation(int priority, int seq, String input, Invoker invoker, Invocation invocation) {
 		super(seq, input);
 		this.priority = priority;

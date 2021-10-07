@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -38,11 +39,11 @@ public class Ammo {
 	public void start() {
 		processor.submit(() -> {
 			while (true) {
+				Gatlin.getInstance().getWindow().waitUntilReady();
 				long start = System.currentTimeMillis();
 				try {
 					Window.Snapshot s = window.emptySnapshot();
 					if (s.getLeft() == -1) {
-						Thread.sleep(1L);
 						continue;
 					}
 					int mod = registry.count();
@@ -68,19 +69,18 @@ public class Ammo {
 					if (head != null) {
 						unscheduled.add(head);
 					}
-					for (int i = s.getLeft() + 1; i >= 0 && i <= s.getRight(); i++) {
-						Digest d = window.getDigestOrNull(i);
-						if (d == null) {
-							continue;
-						}
+					for (Digest d : s.getRecalls()) {
 						boolean alreadyScheduled = false;
 						for (int j = 0; j < registry.count(); j++) {
 							BucketShard prevShard = prevShards.get(j);
+							if (prevShard == null) {
+								break;
+							}
 							if (prevShard.index == null) {
 								unscheduled.add(d);
 								continue;
 							}
-							if (prevShard.index.contains(i)) {
+							if (prevShard.index.contains(d.getSeq())) {
 								scheduled.get(j).add(d);
 								alreadyScheduled = true;
 								break;
@@ -91,19 +91,6 @@ public class Ammo {
 						}
 					}
 
-					// min
-					// unbalanced shard
-//					int minCount = Integer.max(unscheduled.size() / 10, 1);
-//					for (int i = 0; i < mod; i++) {
-//						List<Digest> min = unscheduled.subList(0, Integer.min(minCount, unscheduled.size()));
-//						scheduled.get(i).addAll(min);
-//						min.clear();
-//						thisRoundCount.compute(i, (k, v) -> v + minCount);
-//					}
-//					int restShard = sortedShards.get(0);
-//					scheduled.get(restShard).addAll(unscheduled);
-//					thisRoundCount.compute(restShard, (k, v) -> v + unscheduled.size());
-
 					int unscheduledCount = unscheduled.size();
 					int targetCount = 0;
 
@@ -111,7 +98,7 @@ public class Ammo {
 					for (int i = 0; i < mod; i++) {
 						vts.put(i, avgs.get(i).intValue() * scheduled.get(i).size());
 					}
-					int robinPtr = 0;
+					int robinPtr = ThreadLocalRandom.current().nextInt(mod);
 					for (int i = 0; i < unscheduledCount; i++) {
 						int min = -1;
 						int minVt = Integer.MAX_VALUE;
@@ -129,19 +116,6 @@ public class Ammo {
 						thisRoundCount.compute(min, (k, v) -> v + 1);
 						robinPtr++;
 					}
-
-//					final float[] weights = new float[] {0.6F, 0.3F, 0F};
-
-//					for (int i = 0; i < sortedShards.size(); i++) {
-//						int shard = sortedShards.get(i);
-//						float w = weights[i];
-//						int target = Integer
-//							.min(Float.valueOf((float) unscheduledCount * w).intValue(), unscheduled.size());
-//						List<Digest> ds = unscheduled.subList(0, target);
-//						scheduled.get(shard).addAll(ds);
-//						thisRoundCount.put(shard, ds.size());
-//						ds.clear();
-//					}
 
 					// schedule
 					int scheduledCount = scheduled.values().stream()
@@ -181,7 +155,7 @@ public class Ammo {
 				}
 				finally {
 					long cost = System.currentTimeMillis() - start;
-					if (cost > 100) {
+					if (cost > 50) {
 						log.info("AMMO REFRESH SLOW {}", cost);
 					}
 				}

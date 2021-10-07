@@ -49,15 +49,6 @@ public class InvokerRegistry implements Registry {
 		return avg.getOrDefault(shard, 0L);
 	}
 
-	private Invoker next(List<Invoker> invokers) {
-		int idx = ThreadLocalRandom.current().nextInt(invokers.size());
-		String key = this.candidates.get(idx);
-		return invokers.stream()
-			.filter(i -> Clients.getName(i).equals(key))
-			.findFirst()
-			.get();
-	}
-
 	private void init(List<Invoker> invokers) {
 		if (!init) {
 			synchronized (this) {

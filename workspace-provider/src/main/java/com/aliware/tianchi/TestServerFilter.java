@@ -60,11 +60,10 @@ public class TestServerFilter implements Filter, BaseFilter.Listener {
 	private static final long timeoutMillis = 3L;
 	private static final long recallTimeoutMillis = 2L;
 
-	private final WorkerPool pool = new WorkerPool(50, 300);
-	private final Controller autoscaler = new Controller(pool);
 	private final LRUCache<Integer, Boolean> lru = new LRUCache<>(5000);
-	private final AtomicInteger dynamicLeft = new AtomicInteger();
 	private final BlockingQueue<DigestWithResponse> outputQueue = new LinkedBlockingQueue<>();
+	private final WorkerPool pool = new WorkerPool(40, 300, outputQueue);
+	private final Controller autoscaler = new Controller(pool);
 
 	@Override
 	public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
@@ -80,14 +79,6 @@ public class TestServerFilter implements Filter, BaseFilter.Listener {
 				resp.setValue(0);
 				return new AsyncRpcResult(CompletableFuture.completedFuture(resp), invocation);
 			}
-			if (left != -1) {
-				dynamicLeft.updateAndGet(prev -> {
-					if (prev > left) {
-						return prev;
-					}
-					return left;
-				});
-			}
 
 			Set<Integer> dones = new HashSet<>();
 			// parent
@@ -102,6 +93,12 @@ public class TestServerFilter implements Filter, BaseFilter.Listener {
 			long startRecall = System.currentTimeMillis();
 			for (int i = index.length - 1; i >= 0; i--) {
 				int recallIdx = index[i];
+				if (Boolean.TRUE.equals(this.lru.get(recallIdx))) {
+					continue;
+				}
+				if (recallCount.get() >= maxProcessRecall) {
+					break;
+				}
 				long now = System.currentTimeMillis();
 				if (now > startRecall + recallTimeoutMillis) {
 					break;
@@ -109,16 +106,7 @@ public class TestServerFilter implements Filter, BaseFilter.Listener {
 				if (now > start + timeoutMillis) {
 					break;
 				}
-				if (dynamicLeft.get() > recallIdx) {
-					continue;
-				}
-				if (recallCount.get() >= maxProcessRecall) {
-					break;
-				}
-				if (Boolean.TRUE.equals(this.lru.get(recallIdx))) {
-					continue;
-				}
-				doInvoke(start, invoker, invocation, recallIdx, recallCount, dones, true);
+				doInvoke(invoker, invocation, recallIdx, recallCount, dones);
 			}
 			long endRecall = System.currentTimeMillis();
 
@@ -160,63 +148,31 @@ public class TestServerFilter implements Filter, BaseFilter.Listener {
 		}
 	}
 
-	private void doInvoke(long start, Invoker invoker, Invocation invocation, int idx, AtomicInteger count, Set<Integer> dones, boolean optional) {
+	private void doInvoke(Invoker invoker, Invocation invocation, int idx, AtomicInteger count, Set<Integer> dones) {
 		Digest d = TrafficControlRequest.getRecall(invocation, idx);
 		ChildInvocation i = new ChildInvocation(invocation, invoker, d);
-		CompletableFuture<Result> f = scheduledInvoke(start, invoker, i, optional);
-		if (f != null) {
-			f.thenAcceptAsync(r -> {
-				if (r != null) {
-					try {
-						DigestWithResponse digestWithResponse = new DigestWithResponse(
-							(Result) r.get(),
-							d.getSeq(),
-							d.getInput());
-						outputQueue.offer(digestWithResponse);
-					}
-					catch (InterruptedException | ExecutionException e) {
-						log.info("FUTURE ABORT: {}", e.getMessage());
-					}
-				}
-			});
+		boolean scheduled = scheduledInvoke(invoker, i, d.getSeq(), d.getInput());
+		if (scheduled) {
 			count.getAndIncrement();
 			dones.add(d.getSeq());
 		}
 	}
 
-	private CompletableFuture<Result> scheduledInvoke(long startTimestamp, Invoker<?> invoker, Invocation invocation, boolean optional) throws RpcException {
-		if (optional && System.currentTimeMillis() > startTimestamp + timeoutMillis) {
-			return null;
-		}
-		int seq = TrafficControlRequest.getSeq(invocation);
+	private boolean scheduledInvoke(Invoker<?> invoker, Invocation invocation, int seq, String input) throws RpcException {
 		Boolean prev = this.lru.put(seq, true);
 		if (prev == null) {
-			return doScheduledInvoke(invoker, invocation, seq, optional);
-		}
-		if (!optional) {
-			return doScheduledInvoke(invoker, invocation, seq, false);
-		}
-		return null;
-	}
-
-	private CompletableFuture<Result> doScheduledInvoke(Invoker<?> invoker, Invocation invocation, int seq, boolean optional) throws RpcException {
-		try {
-			return CompletableFuture.supplyAsync(() -> {
-				if (dynamicLeft.get() > seq && optional) {
-					return null;
-				}
-				long start = System.currentTimeMillis();
+			pool.schedule(seq, input, () -> {
+				long start = System.nanoTime();
 				try {
 					return invoker.invoke(invocation);
 				}
 				finally {
-					this.autoscaler.record(System.currentTimeMillis() - start);
+					this.autoscaler.record((System.nanoTime() - start) / 1000);
 				}
-			}, pool);
+			});
+			return true;
 		}
-		catch (Throwable t) {
-			throw new RpcException(t);
-		}
+		return false;
 	}
 
 	@Override

@@ -19,8 +19,8 @@ public class Controller {
 		this.watermark = 0;
 		this.pool = pool;
 		this.workerAutoscaler = Executors.newSingleThreadScheduledExecutor();
-		this.pid = new MiniPID(0.4D, 0.05D, 0.0001D);
-		pid.setSetpoint(THRESHOLD);
+		this.pid = new MiniPID(20D, 0.0D, 10D);
+		this.pid.setSetpoint(THRESHOLD);
 		this.workerAutoscaler.scheduleAtFixedRate(() -> {
 			if (costs.size() < MIN_SAMPLE) {
 				return;
@@ -37,10 +37,10 @@ public class Controller {
 		}, INTERVAL, INTERVAL, TimeUnit.MILLISECONDS);
 	}
 
-	private static final int CAPACITY = 1000;
-	private static final int THRESHOLD = 50;
-	private static final long INTERVAL = 200;
-	private static final int MIN_SAMPLE = 800;
+	private static final int CAPACITY = 3000;
+	private static final int THRESHOLD = 100;
+	private static final long INTERVAL = 100;
+	private static final int MIN_SAMPLE = 2000;
 
 	private final LinkedList<Long> costs = new LinkedList<>();
 	private final Lock lock = new ReentrantLock();
@@ -54,13 +54,13 @@ public class Controller {
 		lock.lock();
 		if (costs.size() == CAPACITY) {
 			long removed = costs.removeFirst();
-			if (removed >= 30) {
+			if (removed >= 8000) {
 				watermark--;
 			}
 			sum -= removed;
 		}
 		costs.addLast(cost);
-		if (cost >= 30) {
+		if (cost >= 8000) {
 			watermark++;
 		}
 		sum += cost;

@@ -1,8 +1,5 @@
 package io.yue9944882.flowcontrol.loadbalance;
 
-import java.util.List;
-
-import io.yue9944882.flowcontrol.client.Bullet;
 import org.apache.dubbo.rpc.Invoker;
 
 public interface Registry {

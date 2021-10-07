@@ -74,7 +74,7 @@ public class Gatlin {
 						String name = e.getKey();
 						Barrel barrel = barrels.get(name);
 						ScheduledExecutorService workers = this.engines.get(name);
-						workers.scheduleAtFixedRate(
+						workers.scheduleWithFixedDelay(
 							barrel,
 							0,
 							1,

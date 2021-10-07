@@ -46,11 +46,13 @@ public class Barrel implements Runnable {
 			semaphore.acquire(1);
 			OffsetDateTime start = OffsetDateTime.now();
 			Invocation inv = build(invoker);
-			TrafficControlRequest req = new TrafficControlRequest(0,
-				registry.indexOf(invoker),
+			int shard = registry.indexOf(invoker);
+			TrafficControlRequest req = new TrafficControlRequest(
+				0,
+				shard,
 				registry.count(),
 				inv);
-			ammo.inject(registry.indexOf(invoker), req);
+			ammo.inject(shard, req);
 			AtomicBoolean released = new AtomicBoolean(false);
 			timeoutScheduler.schedule(() -> {
 				if (released.compareAndSet(false, true)) {
@@ -71,7 +73,7 @@ public class Barrel implements Runnable {
 						}
 						log.info("{} API COST: {} (AVG {})", Clients.getName(invoker),
 							end.toInstant().toEpochMilli() - start.toInstant().toEpochMilli(), avg);
-						registry.setAvg(registry.indexOf(invoker), avg);
+						registry.setAvg(shard, avg);
 						TrafficControlResult.CraftResult[] craftResults = TrafficControlResult.parseResponses(r);
 						for (TrafficControlResult.CraftResult result : craftResults) {
 							Response resp = Gatlin.getInstance().popResponse(result.getSeq());

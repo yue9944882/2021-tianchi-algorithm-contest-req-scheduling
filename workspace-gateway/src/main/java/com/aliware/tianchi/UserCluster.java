@@ -1,14 +1,8 @@
 package com.aliware.tianchi;
 
-import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
-import io.yue9944882.flowcontrol.basic.Request;
-import io.yue9944882.flowcontrol.basic.Response;
-import io.yue9944882.flowcontrol.basic.RpcRequest;
-import io.yue9944882.flowcontrol.basic.RpcResponse;
 import io.yue9944882.flowcontrol.client.Barrel;
 import io.yue9944882.flowcontrol.client.Gatlin;
 import org.apache.dubbo.rpc.Invoker;
@@ -28,12 +22,6 @@ public class UserCluster extends AbstractCluster {
 			for (Invoker invoker : invokers) {
 				RpcInvocation invocation = Barrel.build(invoker);
 				invoker.invoke(invocation);
-			}
-			for (Invoker invoker : invokers) {
-				Request req = Gatlin.getInstance().getWindow().start(Barrel.build(invoker), OffsetDateTime.now());
-				Response resp = new RpcResponse(OffsetDateTime.now(), req);
-				Gatlin.getInstance().schedule(req.getSeq(), resp);
-				Gatlin.getInstance().getWindow().finish(req.getSeq(), "DONE");
 			}
 		}
 		catch (Throwable t) {

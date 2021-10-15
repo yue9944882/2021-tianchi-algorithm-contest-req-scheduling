@@ -5,6 +5,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -22,6 +24,9 @@ public class Controller {
 		this.pid = new MiniPID(20D, 0.0D, 10D);
 		this.pid.setSetpoint(THRESHOLD);
 		this.workerAutoscaler.scheduleAtFixedRate(() -> {
+			if (!isRefreshed.get()) {
+				return;
+			}
 			if (costs.size() < MIN_SAMPLE) {
 				return;
 			}
@@ -34,17 +39,19 @@ public class Controller {
 			if (velocity > 0) {
 				this.pool.addWorker();
 			}
+			isRefreshed.set(false);
 		}, INTERVAL, INTERVAL, TimeUnit.MILLISECONDS);
 	}
 
 	private static final int CAPACITY = 3000;
 	private static final int THRESHOLD = 100;
-	private static final long INTERVAL = 100;
+	private static final long INTERVAL = 20;
 	private static final int MIN_SAMPLE = 2000;
 
 	private final LinkedList<Long> costs = new LinkedList<>();
 	private final Lock lock = new ReentrantLock();
 	private final ScheduledExecutorService workerAutoscaler;
+	private final AtomicBoolean isRefreshed = new AtomicBoolean(true);
 	private final WorkerPool pool;
 	private final MiniPID pid;
 	public long sum;
@@ -65,6 +72,7 @@ public class Controller {
 		}
 		sum += cost;
 		lock.unlock();
+		isRefreshed.set(true);
 	}
 
 	public long avg() {

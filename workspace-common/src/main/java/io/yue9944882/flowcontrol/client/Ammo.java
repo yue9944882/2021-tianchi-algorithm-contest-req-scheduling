@@ -143,7 +143,7 @@ public class Ammo {
 						newShards.putIfAbsent(kv.getKey(), new BucketShard());
 						newShards.get(kv.getKey()).left = s.getLeft();
 						newShards.get(kv.getKey()).right = s.getRight();
-						newShards.get(kv.getKey()).items = kv.getValue().stream().toArray(Digest[]::new);
+						newShards.get(kv.getKey()).items = kv.getValue().toArray(new Digest[0]);
 						newShards.get(kv.getKey()).index = kv.getValue().stream()
 							.map(d -> d.getSeq())
 							.collect(Collectors.toSet());

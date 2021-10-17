@@ -1,13 +1,24 @@
 package com.aliware.tianchi;
 
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutorService;
+
+import io.yue9944882.flowcontrol.client.Gatlin;
 import org.apache.dubbo.common.constants.CommonConstants;
 import org.apache.dubbo.common.extension.Activate;
+import org.apache.dubbo.common.extension.ExtensionLoader;
+import org.apache.dubbo.common.threadpool.ThreadPool;
+import org.apache.dubbo.common.threadpool.manager.ExecutorRepository;
+import org.apache.dubbo.remoting.RemotingException;
+import org.apache.dubbo.remoting.TimeoutException;
 import org.apache.dubbo.rpc.BaseFilter;
 import org.apache.dubbo.rpc.Filter;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Result;
 import org.apache.dubbo.rpc.RpcException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 客户端过滤器（选址后）
@@ -17,23 +28,37 @@ import org.apache.dubbo.rpc.RpcException;
  */
 @Activate(group = CommonConstants.CONSUMER)
 public class TestClientFilter implements Filter, BaseFilter.Listener {
-    @Override
-    public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
-        try {
-            Result result = invoker.invoke(invocation);
-            return result;
-        } catch (Exception e) {
-            throw e;
-        }
 
-    }
+	private static final Logger log = LoggerFactory.getLogger(TestClientFilter.class);
 
-    @Override
-    public void onResponse(Result appResponse, Invoker<?> invoker, Invocation invocation) {
-    }
+	@Override
+	public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
+		ExecutorRepository executorRepository =
+			ExtensionLoader.getExtensionLoader(ExecutorRepository.class).getDefaultExtension();
+		ExecutorService pool = executorRepository.getExecutor(invoker.getUrl());
+		if (pool == null || pool.isShutdown() || pool.isTerminated()) {
+			synchronized (this) {
+				pool = executorRepository.getExecutor(invoker.getUrl());
+				if (pool == null || pool.isShutdown() || pool.isTerminated()) {
+					executorRepository.createExecutorIfAbsent(invoker.getUrl());
+				}
+			}
+		}
+		try {
+			Result result = invoker.invoke(invocation);
+			return result;
+		}
+		catch (Exception e) {
+			throw e;
+		}
 
-    @Override
-    public void onError(Throwable t, Invoker<?> invoker, Invocation invocation) {
+	}
 
-    }
+	@Override
+	public void onResponse(Result appResponse, Invoker<?> invoker, Invocation invocation) {
+	}
+
+	@Override
+	public void onError(Throwable t, Invoker<?> invoker, Invocation invocation) {
+	}
 }

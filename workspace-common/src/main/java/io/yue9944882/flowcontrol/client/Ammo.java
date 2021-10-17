@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import io.yue9944882.flowcontrol.loadbalance.Registry;
+import io.yue9944882.flowcontrol.prober.Prober;
 import io.yue9944882.flowcontrol.traffic.TrafficControlRequest;
 import io.yue9944882.flowcontrol.window.Digest;
 import io.yue9944882.flowcontrol.window.Window;
@@ -25,25 +26,28 @@ public class Ammo {
 
 	private static final Logger log = LoggerFactory.getLogger(Ammo.class);
 
-	public Ammo(Window window, Registry registry) {
+	public Ammo(Window window, Registry registry, Prober prober) {
 		this.window = window;
 		this.bucket = new Bucket();
 		this.registry = registry;
+		this.prober = prober;
 	}
 
 	private final Window window;
 	private final ExecutorService processor = Executors.newSingleThreadExecutor();
 	private final Bucket bucket;
 	private final Registry registry;
+	private final Prober prober;
 
 	public void start() {
 		processor.submit(() -> {
 			while (true) {
-				Gatlin.getInstance().getWindow().waitUntilReady();
+				Thread.sleep(1L);
 				long start = System.currentTimeMillis();
 				try {
 					Window.Snapshot s = window.emptySnapshot();
 					if (s.getLeft() == -1) {
+						Gatlin.getInstance().getWindow().waitUntilReady();
 						continue;
 					}
 					int mod = registry.count();
@@ -52,10 +56,12 @@ public class Ammo {
 					Map<Integer, List<Digest>> scheduled = new HashMap<>();
 					Map<Integer, Integer> thisRoundCount = new HashMap<>();
 					Map<Integer, Long> avgs = new HashMap<>();
-					for (int i = 0; i < registry.count(); i++) {
+					Map<Integer, Boolean> healthy = new HashMap<>();
+					for (int i = 0; i < mod; i++) {
 						scheduled.putIfAbsent(i, new ArrayList<>());
 						thisRoundCount.putIfAbsent(i, 0);
 						avgs.put(i, 0L);
+						healthy.put(i, prober.isHealthy(i));
 					}
 
 					// collect avg
@@ -69,6 +75,7 @@ public class Ammo {
 					if (head != null) {
 						unscheduled.add(head);
 					}
+
 					for (Digest d : s.getRecalls()) {
 						boolean alreadyScheduled = false;
 						for (int j = 0; j < registry.count(); j++) {
@@ -91,6 +98,12 @@ public class Ammo {
 						}
 					}
 
+					for (int i = 0; i < mod; i++) {
+						if (!healthy.get(i)) {
+							unscheduled.addAll(scheduled.get(i));
+						}
+					}
+
 					int unscheduledCount = unscheduled.size();
 					int targetCount = 0;
 
@@ -103,12 +116,18 @@ public class Ammo {
 						int min = -1;
 						int minVt = Integer.MAX_VALUE;
 						for (int j = 0; j < mod; j++) {
+							if (!healthy.get(j)) {
+								continue;
+							}
 							int ptr = (robinPtr + j) % mod;
 							int vt = vts.get(ptr);
 							if (vt < minVt) {
 								minVt = vt;
 								min = ptr;
 							}
+						}
+						if (min == -1) {
+							break;
 						}
 						int finalMin = min;
 						vts.compute(min, (k, v) -> v + avgs.get(finalMin).intValue());

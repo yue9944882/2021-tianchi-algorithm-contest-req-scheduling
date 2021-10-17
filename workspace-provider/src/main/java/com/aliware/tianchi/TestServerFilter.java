@@ -16,6 +16,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -64,6 +65,8 @@ public class TestServerFilter implements Filter, BaseFilter.Listener {
 	private final BlockingQueue<DigestWithResponse> outputQueue = new LinkedBlockingQueue<>();
 	private final WorkerPool pool = new WorkerPool(40, 300, outputQueue);
 	private final Controller autoscaler = new Controller(pool);
+//	private final ScheduledExecutorService retry = Executors.newScheduledThreadPool(10);
+//	private final long retryMillis = 300L;
 
 	@Override
 	public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
@@ -74,13 +77,15 @@ public class TestServerFilter implements Filter, BaseFilter.Listener {
 			int right = TrafficControlRequest.getRight(invocation);
 			int shard = TrafficControlRequest.getShard(invocation);
 			int mod = TrafficControlRequest.getMod(invocation);
+//			retry.schedule(() -> {
+//				this.lru.put(left, false);
+//			}, retryMillis, TimeUnit.MILLISECONDS);
+			Set<Integer> dones = new HashSet<>();
 			if (seq == -1) {
 				AppResponse resp = new AppResponse();
 				resp.setValue(0);
 				return new AsyncRpcResult(CompletableFuture.completedFuture(resp), invocation);
 			}
-
-			Set<Integer> dones = new HashSet<>();
 			// parent
 			long start = System.currentTimeMillis();
 			AppResponse resp = new AppResponse();
@@ -160,7 +165,7 @@ public class TestServerFilter implements Filter, BaseFilter.Listener {
 
 	private boolean scheduledInvoke(Invoker<?> invoker, Invocation invocation, int seq, String input) throws RpcException {
 		Boolean prev = this.lru.put(seq, true);
-		if (prev == null) {
+		if (prev == null || !prev) {
 			pool.schedule(seq, input, () -> {
 				long start = System.nanoTime();
 				try {

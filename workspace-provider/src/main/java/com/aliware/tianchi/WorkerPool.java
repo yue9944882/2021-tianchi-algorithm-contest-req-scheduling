@@ -101,7 +101,7 @@ public class WorkerPool extends ThreadPoolExecutor {
 					(Result) result.get(),
 					((Task) r).seq,
 					((Task) r).input);
-				outputQueue.offer(digestWithResponse);
+				outputQueue.add(digestWithResponse);
 			}
 			catch (InterruptedException | ExecutionException e) {
 				log.info("POOL ABORT: {}", e.getMessage());

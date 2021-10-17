@@ -34,6 +34,5 @@ public class TestClientClusterFilter implements ClusterFilter, BaseFilter.Listen
 
     @Override
     public void onError(Throwable t, Invoker<?> invoker, Invocation invocation) {
-
     }
 }

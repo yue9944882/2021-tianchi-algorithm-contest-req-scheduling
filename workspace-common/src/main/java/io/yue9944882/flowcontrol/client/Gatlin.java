@@ -9,10 +9,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 import io.yue9944882.flowcontrol.basic.Response;
 import io.yue9944882.flowcontrol.loadbalance.Registry;
 import io.yue9944882.flowcontrol.loadbalance.InvokerRegistry;
+import io.yue9944882.flowcontrol.prober.FixedProber;
+import io.yue9944882.flowcontrol.prober.Prober;
 import io.yue9944882.flowcontrol.window.Window;
 import org.apache.dubbo.rpc.Invoker;
 import org.slf4j.Logger;
@@ -41,18 +44,19 @@ public class Gatlin {
 	}
 
 	private Gatlin(List<Invoker> invokers, Window window, Registry registry, int poolCount) {
+		Prober prober = new FixedProber();
 		this.pool = Executors.newFixedThreadPool(poolCount);
 		this.poolCount = poolCount;
 		this.window = window;
 		this.registry = registry;
 		this.barrels = new HashMap<>();
 		this.engines = new HashMap<>();
-		this.ammo = new Ammo(this.window, this.registry);
+		this.ammo = new Ammo(this.window, this.registry, prober);
 		for (Invoker invoker : invokers) {
 			Semaphore sem = new Semaphore(poolCount, true);
 			String name = Clients.getName(invoker);
 			this.engines.put(name, Executors.newScheduledThreadPool(poolCount));
-			this.barrels.put(name, new Barrel(registry, name, sem, invoker, ammo));
+			this.barrels.put(name, new Barrel(registry, prober, name, sem, invoker, ammo));
 		}
 	}
 

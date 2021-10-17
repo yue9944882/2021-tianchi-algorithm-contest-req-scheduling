@@ -23,25 +23,21 @@ public class Window {
 	private static final Logger log = LoggerFactory.getLogger(Window.class);
 
 	public Window() {
-		this.tracking = new TreeMap<>(Integer::compare);
 		this.lock = new ReentrantReadWriteLock();
-		this.starts = new HashMap<>();
+		this.tracking = new TreeMap<>(Integer::compare);
 	}
 
 	private static final AtomicInteger serial = new AtomicInteger();
 	private final TreeMap<Integer, Digest> tracking;
-	private final Map<Integer, OffsetDateTime> starts;
 	private final ReadWriteLock lock;
 	private final AtomicBoolean ready = new AtomicBoolean(false);
 
 	public Request start(Invocation inv, OffsetDateTime start) {
 		int seq = serial.incrementAndGet();
-		log.info("[{}] WINDOW START {}", start, seq);
 		RpcRequest req = new RpcRequest(seq, inv);
 		Digest digest = new Digest(seq, req.getInput());
 
 		this.lock.writeLock().lock();
-		this.starts.put(seq, start);
 		this.tracking.put(digest.getSeq(), digest);
 		this.lock.writeLock().unlock();
 
@@ -55,14 +51,6 @@ public class Window {
 	public void finish(int seq, String reason) {
 		this.lock.writeLock().lock();
 		this.tracking.remove(seq);
-		OffsetDateTime start = this.starts.remove(seq);
-		if (start != null) {
-			log.info("[{}] WINDOW FINISH {} REASON {}, COST {}",
-				OffsetDateTime.now(),
-				seq,
-				reason,
-				OffsetDateTime.now().toInstant().toEpochMilli() - start.toInstant().toEpochMilli());
-		}
 		this.lock.writeLock().unlock();
 	}
 

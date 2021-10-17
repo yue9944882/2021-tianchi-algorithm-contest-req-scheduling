@@ -65,10 +65,7 @@ public class Ammo {
 					}
 
 					// collect avg
-					scheduled.entrySet().stream()
-						.forEach(kv -> {
-							avgs.put(kv.getKey(), registry.getAvg(kv.getKey()));
-						});
+					scheduled.forEach((key, value) -> avgs.put(key, registry.getAvg(key)));
 					// stable sort
 					List<Digest> unscheduled = new ArrayList<>();
 
@@ -101,8 +98,6 @@ public class Ammo {
 					}
 
 					int unscheduledCount = unscheduled.size();
-					int targetCount = 0;
-
 					Map<Integer, Integer> vts = new HashMap<>();
 					for (int i = 0; i < mod; i++) {
 						vts.put(i, avgs.get(i).intValue() * scheduled.get(i).size());
@@ -132,32 +127,11 @@ public class Ammo {
 						robinPtr++;
 					}
 
-					// schedule
-					int scheduledCount = scheduled.values().stream()
-						.map(bucketShard -> bucketShard.size())
-						.reduce(0, Integer::sum);
-
-
-					// refresh
-					log.info("SHARD TARGET WIN [{}<<{}]({}) from {} to {} in {}: {}",
-						0, 0,
-						avgs.entrySet().stream()
-							.map(kv -> {
-								return kv.getKey() + "=" + kv.getValue();
-							})
-							.collect(Collectors.joining(",")),
-						scheduledCount, targetCount, unscheduledCount,
-						scheduled.entrySet().stream()
-							.map(kv -> {
-								return kv.getKey()
-									+ "==>(+" + thisRoundCount.get(kv.getKey()) + ")" + kv.getValue().size();
-							})
-							.collect(Collectors.joining(",")));
-					scheduled.entrySet().stream().forEach(kv -> {
+					scheduled.entrySet().forEach(kv -> {
 						newShards.putIfAbsent(kv.getKey(), new BucketShard());
 						newShards.get(kv.getKey()).items = kv.getValue().toArray(new Digest[0]);
 						newShards.get(kv.getKey()).index = kv.getValue().stream()
-							.map(d -> d.getSeq())
+							.map(Digest::getSeq)
 							.collect(Collectors.toSet());
 					});
 					bucket.items.set(newShards);

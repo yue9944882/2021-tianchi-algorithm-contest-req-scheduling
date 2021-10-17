@@ -46,7 +46,7 @@ public class Ammo {
 				long start = System.currentTimeMillis();
 				try {
 					Window.Snapshot s = window.emptySnapshot();
-					if (s.getLeft() == -1) {
+					if (s.getRecalls().length == 0) {
 						Gatlin.getInstance().getWindow().waitUntilReady();
 						continue;
 					}
@@ -71,10 +71,6 @@ public class Ammo {
 						});
 					// stable sort
 					List<Digest> unscheduled = new ArrayList<>();
-					Digest head = window.getDigestOrNull(s.getLeft());
-					if (head != null) {
-						unscheduled.add(head);
-					}
 
 					for (Digest d : s.getRecalls()) {
 						boolean alreadyScheduled = false;
@@ -143,8 +139,7 @@ public class Ammo {
 
 
 					// refresh
-					log.info("SHARD TARGET [{}, {}] WIN [{}<<{}]({}) from {} to {} in {}: {}",
-						s.getLeft(), s.getRight(),
+					log.info("SHARD TARGET WIN [{}<<{}]({}) from {} to {} in {}: {}",
 						0, 0,
 						avgs.entrySet().stream()
 							.map(kv -> {
@@ -160,8 +155,6 @@ public class Ammo {
 							.collect(Collectors.joining(",")));
 					scheduled.entrySet().stream().forEach(kv -> {
 						newShards.putIfAbsent(kv.getKey(), new BucketShard());
-						newShards.get(kv.getKey()).left = s.getLeft();
-						newShards.get(kv.getKey()).right = s.getRight();
 						newShards.get(kv.getKey()).items = kv.getValue().toArray(new Digest[0]);
 						newShards.get(kv.getKey()).index = kv.getValue().stream()
 							.map(d -> d.getSeq())
@@ -201,14 +194,11 @@ public class Ammo {
 			}
 			req.appendIndex(seqs);
 			Arrays.stream(bucketShard.items).forEach(req::appendRecall);
-			req.setWindow(bucketShard.left, bucketShard.right);
 		}
 	}
 
 	public class BucketShard {
 		private Digest[] items;
 		private Set<Integer> index;
-		private int left;
-		private int right;
 	}
 }

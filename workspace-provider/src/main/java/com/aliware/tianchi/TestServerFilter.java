@@ -73,10 +73,10 @@ public class TestServerFilter implements Filter, BaseFilter.Listener {
 		try {
 			int[] index = TrafficControlRequest.getIndex(invocation);
 			int seq = TrafficControlRequest.getSeq(invocation);
-			int left = TrafficControlRequest.getLeft(invocation);
-			int right = TrafficControlRequest.getRight(invocation);
-			int shard = TrafficControlRequest.getShard(invocation);
-			int mod = TrafficControlRequest.getMod(invocation);
+//			int left = TrafficControlRequest.getLeft(invocation);
+//			int right = TrafficControlRequest.getRight(invocation);
+//			int shard = TrafficControlRequest.getShard(invocation);
+//			int mod = TrafficControlRequest.getMod(invocation);
 //			retry.schedule(() -> {
 //				this.lru.put(left, false);
 //			}, retryMillis, TimeUnit.MILLISECONDS);
@@ -131,18 +131,18 @@ public class TestServerFilter implements Filter, BaseFilter.Listener {
 			long avg = autoscaler.avg();
 			result.setObjectAttachment(Constants.RESP_HEADER_KEY_AVG_COST_MILLIS, avg);
 
-			if (dequeueCount > 0) {
-				log.info("[{}] ({}/{}) WINDOW [{},{}] SERVE {} COST {} AVG {}, RECALL (Q{}/DQ{}/R{})={}/{}): [{}] <== [{}/{}] >>>> [{}]",
-					OffsetDateTime.now(),
-					shard, mod,
-					left, right,
-					seq, endDequeue - start, avg,
-					outputQueue.size(), dequeueCount, recallCount.get(),
-					endDequeue - startDequeue, endRecall - startRecall,
-					doneRecalls.stream().map(digest -> Objects.toString(digest.getSeq())).toArray(),
-					index.length, index,
-					dones.stream().toArray());
-			}
+//			if (dequeueCount > 0) {
+//				log.info("[{}] ({}/{}) WINDOW [{},{}] SERVE {} COST {} AVG {}, RECALL (Q{}/DQ{}/R{})={}/{}): [{}] <== [{}/{}] >>>> [{}]",
+//					OffsetDateTime.now(),
+//					shard, mod,
+//					left, right,
+//					seq, endDequeue - start, avg,
+//					outputQueue.size(), dequeueCount, recallCount.get(),
+//					endDequeue - startDequeue, endRecall - startRecall,
+//					doneRecalls.stream().map(digest -> Objects.toString(digest.getSeq())).toArray(),
+//					index.length, index,
+//					dones.stream().toArray());
+//			}
 
 			return result;
 		}

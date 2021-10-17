@@ -9,11 +9,11 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 
 import io.yue9944882.flowcontrol.basic.Response;
-import io.yue9944882.flowcontrol.loadbalance.Registry;
 import io.yue9944882.flowcontrol.loadbalance.InvokerRegistry;
+import io.yue9944882.flowcontrol.loadbalance.Registry;
+import io.yue9944882.flowcontrol.param.Parameters;
 import io.yue9944882.flowcontrol.prober.FixedProber;
 import io.yue9944882.flowcontrol.prober.Prober;
 import io.yue9944882.flowcontrol.window.Window;
@@ -35,7 +35,7 @@ public class Gatlin {
 		if (!init) {
 			synchronized (Gatlin.class) {
 				if (!init) {
-					instance = new Gatlin(initInvokers, new Window(), new InvokerRegistry(initInvokers), 80);
+					instance = new Gatlin(initInvokers, new Window(), new InvokerRegistry(initInvokers), Parameters.GATLIN_POOL_COUNT);
 					instance.start();
 					init = true;
 				}
@@ -81,7 +81,7 @@ public class Gatlin {
 						workers.scheduleWithFixedDelay(
 							barrel,
 							0,
-							1,
+							Parameters.GATLIN_TRANSMIT_INTERVAL_MILLIS,
 							TimeUnit.MILLISECONDS);
 					}
 					this.ammo.start();

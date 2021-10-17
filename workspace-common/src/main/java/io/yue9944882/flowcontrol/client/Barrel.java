@@ -1,6 +1,5 @@
 package io.yue9944882.flowcontrol.client;
 
-import java.time.OffsetDateTime;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executors;
@@ -8,10 +7,10 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 import io.yue9944882.flowcontrol.basic.Response;
 import io.yue9944882.flowcontrol.loadbalance.Registry;
+import io.yue9944882.flowcontrol.param.Parameters;
 import io.yue9944882.flowcontrol.prober.Prober;
 import io.yue9944882.flowcontrol.traffic.Constants;
 import io.yue9944882.flowcontrol.traffic.TrafficControlRequest;
@@ -20,7 +19,6 @@ import org.apache.dubbo.remoting.RemotingException;
 import org.apache.dubbo.remoting.TimeoutException;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
-import org.apache.dubbo.rpc.RpcContext;
 import org.apache.dubbo.rpc.RpcInvocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,9 +64,8 @@ public class Barrel implements Runnable {
 			timeoutScheduler.schedule(() -> {
 				if (released.compareAndSet(false, true)) {
 					semaphore.release(1);
-					log.info("TIMEOUT!");
 				}
-			}, 50, TimeUnit.MILLISECONDS);
+			}, Parameters.CONSUMER_SEM_RELEASE_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
 			invoker.invoke(inv)
 				.whenCompleteWithContext((r, t) -> {
 					if (released.compareAndSet(false, true)) {

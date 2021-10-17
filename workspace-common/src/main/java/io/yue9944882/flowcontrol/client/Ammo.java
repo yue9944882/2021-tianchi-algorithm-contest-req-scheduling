@@ -2,8 +2,6 @@ package io.yue9944882.flowcontrol.client;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,7 +40,6 @@ public class Ammo {
 	public void start() {
 		processor.submit(() -> {
 			while (true) {
-				Thread.sleep(1L);
 				long start = System.currentTimeMillis();
 				try {
 					Window.Snapshot s = window.emptySnapshot();
@@ -95,6 +92,11 @@ public class Ammo {
 						}
 					}
 
+					if (unscheduled.size() == 0) {
+						Thread.sleep(1L);
+						continue;
+					}
+
 					int unscheduledCount = unscheduled.size();
 					Map<Integer, Integer> vts = new HashMap<>();
 					for (int i = 0; i < mod; i++) {
@@ -132,6 +134,7 @@ public class Ammo {
 							.collect(Collectors.toSet());
 					});
 					bucket.items.set(newShards);
+					Thread.sleep(1L);
 				}
 				catch (Throwable t) {
 					log.info("AMMO PROCESSOR ABORT: {} {}", t.getMessage(), t.getStackTrace());

@@ -1,27 +1,15 @@
 package com.aliware.tianchi;
 
-import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
+import io.yue9944882.flowcontrol.param.Parameters;
 import io.yue9944882.flowcontrol.traffic.Constants;
 import io.yue9944882.flowcontrol.traffic.TrafficControlRequest;
 import io.yue9944882.flowcontrol.traffic.TrafficControlResult;
@@ -37,13 +25,9 @@ import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Result;
 import org.apache.dubbo.rpc.RpcException;
-
 import org.apache.dubbo.rpc.RpcInvocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import oshi.SystemInfo;
-import oshi.hardware.GlobalMemory;
-import oshi.hardware.HardwareAbstractionLayer;
 
 /**
  * 服务端过滤器
@@ -57,13 +41,16 @@ public class TestServerFilter implements Filter, BaseFilter.Listener {
 	}
 
 	private static final Logger log = LoggerFactory.getLogger(TestServerFilter.class);
-	private static final int maxProcessRecall = 100;
-	private static final long timeoutMillis = 3L;
-	private static final long recallTimeoutMillis = 2L;
+	private static final int maxProcessRecall = Parameters.PROVIDER_MAX_PROCESS_RECALL;
+	private static final long timeoutMillis = Parameters.PROVIDER_PROCESS_TOTAL_TIMEOUT_MILLIS;
+	private static final long recallTimeoutMillis = Parameters.PROVIDER_PROCESS_RECALL_TIMEOUT_MILLIS;
 
-	private final LRUCache<Integer, Boolean> lru = new LRUCache<>(5000);
+	private final LRUCache<Integer, Boolean> lru = new LRUCache<>(Parameters.PROVIDER_LRU_CACHE_CAPACITY);
 	private final BlockingQueue<DigestWithResponse> outputQueue = new LinkedBlockingQueue<>();
-	private final WorkerPool pool = new WorkerPool(40, 300, outputQueue);
+	private final WorkerPool pool = new WorkerPool(
+		Parameters.PROVIDER_PID_CONCURRENCY_MIN,
+		Parameters.PROVIDER_PID_CONCURRENCY_MAX,
+		outputQueue);
 	private final Controller autoscaler = new Controller(pool);
 //	private final ScheduledExecutorService retry = Executors.newScheduledThreadPool(10);
 //	private final long retryMillis = 300L;
@@ -73,13 +60,6 @@ public class TestServerFilter implements Filter, BaseFilter.Listener {
 		try {
 			int[] index = TrafficControlRequest.getIndex(invocation);
 			int seq = TrafficControlRequest.getSeq(invocation);
-//			int left = TrafficControlRequest.getLeft(invocation);
-//			int right = TrafficControlRequest.getRight(invocation);
-//			int shard = TrafficControlRequest.getShard(invocation);
-//			int mod = TrafficControlRequest.getMod(invocation);
-//			retry.schedule(() -> {
-//				this.lru.put(left, false);
-//			}, retryMillis, TimeUnit.MILLISECONDS);
 			Set<Integer> dones = new HashSet<>();
 			if (seq == -1) {
 				AppResponse resp = new AppResponse();
@@ -114,9 +94,8 @@ public class TestServerFilter implements Filter, BaseFilter.Listener {
 				doInvoke(invoker, invocation, recallIdx, recallCount, dones);
 			}
 
-			int maxDequeue = 200;
 			List<DigestWithResponse> doneRecalls = new LinkedList<>();
-			outputQueue.drainTo(doneRecalls, maxDequeue);
+			outputQueue.drainTo(doneRecalls, Parameters.PROVIDER_MAX_DEQUEUE_RECALL);
 			doneRecalls.stream().forEach(digestWithResponse -> {
 				tcResult.append(
 					digestWithResponse.getSeq(),
@@ -127,19 +106,6 @@ public class TestServerFilter implements Filter, BaseFilter.Listener {
 
 			long avg = autoscaler.avg();
 			result.setObjectAttachment(Constants.RESP_HEADER_KEY_AVG_COST_MILLIS, avg);
-
-//			if (dequeueCount > 0) {
-//				log.info("[{}] ({}/{}) WINDOW [{},{}] SERVE {} COST {} AVG {}, RECALL (Q{}/DQ{}/R{})={}/{}): [{}] <== [{}/{}] >>>> [{}]",
-//					OffsetDateTime.now(),
-//					shard, mod,
-//					left, right,
-//					seq, endDequeue - start, avg,
-//					outputQueue.size(), dequeueCount, recallCount.get(),
-//					endDequeue - startDequeue, endRecall - startRecall,
-//					doneRecalls.stream().map(digest -> Objects.toString(digest.getSeq())).toArray(),
-//					index.length, index,
-//					dones.stream().toArray());
-//			}
 
 			return result;
 		}

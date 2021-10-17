@@ -1,6 +1,5 @@
 package io.yue9944882.flowcontrol.window;
 
-import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.Set;
 import java.util.TreeMap;
@@ -11,6 +10,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import io.yue9944882.flowcontrol.basic.Request;
 import io.yue9944882.flowcontrol.basic.RpcRequest;
+import io.yue9944882.flowcontrol.param.Parameters;
 import org.apache.dubbo.rpc.Invocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,7 +20,7 @@ public class Window {
 	private static final Logger log = LoggerFactory.getLogger(Window.class);
 
 	public Window() {
-		this.lockMod = 600;
+		this.lockMod = Parameters.GATLIN_WINDOW_LOCKMOD;
 		this.locks = new ReadWriteLock[lockMod];
 		this.trackings = new TreeMap[lockMod];
 		for (int i = 0; i < lockMod; i++) {
@@ -60,6 +60,9 @@ public class Window {
 	public Snapshot emptySnapshot() {
 		TreeMap<Integer, Digest> items = new TreeMap<>();
 		for (int i = 0; i < lockMod; i++) {
+			if (this.trackings[i].size() == 0) {
+				continue;
+			}
 			this.locks[i].readLock().lock();
 			this.trackings[i].forEach(items::put);
 			this.locks[i].readLock().unlock();

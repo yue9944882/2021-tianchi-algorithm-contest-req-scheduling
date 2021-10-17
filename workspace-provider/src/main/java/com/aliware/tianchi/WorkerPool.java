@@ -3,18 +3,13 @@ package com.aliware.tianchi;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.FutureTask;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
 
+import io.yue9944882.flowcontrol.param.Parameters;
 import org.apache.dubbo.rpc.Result;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,8 +18,8 @@ public class WorkerPool extends ThreadPoolExecutor {
 
 	private static final Logger log = LoggerFactory.getLogger(WorkerPool.class);
 
-	private static final int offset = 100;
-	private static final int batch = 600;
+	private static final int offset = Parameters.PROVIDER_QUEUE_OFFSET;
+	private static final int batch = Parameters.PROVIDER_QUEUE_CHUNK;
 
 
 	public WorkerPool(int workerCount, int maxWorkerCount, BlockingQueue<DigestWithResponse> outputQueue) {

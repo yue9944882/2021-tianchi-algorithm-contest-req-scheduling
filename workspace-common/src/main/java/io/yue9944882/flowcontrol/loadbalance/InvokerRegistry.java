@@ -1,10 +1,13 @@
 package io.yue9944882.flowcontrol.loadbalance;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import io.yue9944882.flowcontrol.client.Clients;
 import org.apache.dubbo.rpc.Invoker;
@@ -19,19 +22,16 @@ public class InvokerRegistry implements Registry {
 		init(invokers);
 	}
 
+	private final Map<String, Integer> index = new HashMap<>();
 	private final List<String> candidates = new ArrayList<>();
-	private final Map<Integer, Long> avg = new ConcurrentHashMap<>();
+	private final Map<Integer, ReadWriteLock> avgLock = new HashMap<>();
+	private final Map<Integer, Long> avg = new HashMap<>();
 	private boolean init = false;
 
 	@Override
 	public int indexOf(Invoker invoker) {
 		String key = Clients.getName(invoker);
-		for (int i = 0; i < candidates.size(); i++) {
-			if (candidates.get(i).equals(key)) {
-				return i;
-			}
-		}
-		return 0;
+		return index.get(key);
 	}
 
 	@Override
@@ -41,12 +41,20 @@ public class InvokerRegistry implements Registry {
 
 	@Override
 	public void setAvg(int shard, long avgCost) {
+		avgLock.get(shard).writeLock().lock();
 		avg.put(shard, avgCost);
+		avgLock.get(shard).writeLock().unlock();
 	}
 
 	@Override
 	public long getAvg(int shard) {
-		return avg.getOrDefault(shard, 0L);
+		avgLock.get(shard).readLock().lock();
+		try {
+			return avg.get(shard);
+		}
+		finally {
+			avgLock.get(shard).readLock().unlock();
+		}
 	}
 
 	private void init(List<Invoker> invokers) {
@@ -58,9 +66,12 @@ public class InvokerRegistry implements Registry {
 						if (!candidates.contains(key)) {
 							candidates.add(key);
 						}
-						for (int i = 0; i < candidates.size(); i++) {
-							log.info("RR INIT: {} -> {}", candidates.get(i), i);
-						}
+					}
+					for (int i = 0; i < candidates.size(); i++) {
+						index.put(candidates.get(i), i);
+						avgLock.put(i, new ReentrantReadWriteLock());
+						avg.put(i, 0L);
+						log.info("RR INIT: {} -> {}", candidates.get(i), i);
 					}
 					init = true;
 				}

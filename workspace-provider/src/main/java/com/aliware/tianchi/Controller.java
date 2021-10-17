@@ -8,7 +8,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,7 +51,7 @@ public class Controller {
 	private static final int MIN_SAMPLE = 2000;
 
 	private final LinkedList<Long> costs = new LinkedList<>();
-	private final Lock lock = new ReentrantLock();
+	private final ReadWriteLock rwLock = new ReentrantReadWriteLock();
 	private final ScheduledExecutorService workerAutoscaler;
 	private final AtomicBoolean isRefreshed = new AtomicBoolean(true);
 	private final WorkerPool pool;
@@ -58,7 +60,7 @@ public class Controller {
 	private int watermark;
 
 	public void record(long cost) {
-		lock.lock();
+		this.rwLock.writeLock().lock();
 		if (costs.size() == CAPACITY) {
 			long removed = costs.removeFirst();
 			if (removed >= 8000) {
@@ -71,12 +73,12 @@ public class Controller {
 			watermark++;
 		}
 		sum += cost;
-		lock.unlock();
+		this.rwLock.writeLock().unlock();
 		isRefreshed.set(true);
 	}
 
 	public long avg() {
-		lock.lock();
+		this.rwLock.readLock().lock();
 		try {
 			if (costs.size() == 0) {
 				return 0;
@@ -84,7 +86,7 @@ public class Controller {
 			return sum / costs.size();
 		}
 		finally {
-			lock.unlock();
+			this.rwLock.readLock().unlock();
 		}
 	}
 

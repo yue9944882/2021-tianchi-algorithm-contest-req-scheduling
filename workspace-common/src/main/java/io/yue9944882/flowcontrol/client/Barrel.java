@@ -32,7 +32,7 @@ public class Barrel implements Runnable {
 	public Barrel(Registry registry, Prober prober, String name, Semaphore semaphore, Invoker invoker, Ammo ammo) {
 		this.name = name;
 		this.semaphore = semaphore;
-		this.invoker = new AtomicReference<>(invoker);
+		this.invoker = invoker;
 		this.ammo = ammo;
 		this.registry = registry;
 		this.prober = prober;
@@ -42,21 +42,20 @@ public class Barrel implements Runnable {
 	private final Prober prober;
 	private final Semaphore semaphore;
 	private final Registry registry;
-	private final AtomicReference<Invoker> invoker;
+	private final Invoker invoker;
 	private final Ammo ammo;
 	private final ScheduledExecutorService timeoutScheduler = Executors.newScheduledThreadPool(1);
 
 	@Override
 	public void run() {
-		int shard = registry.indexOf(invoker.get());
+		int shard = registry.indexOf(invoker);
 		try {
 			if (!prober.isHealthy(shard)) {
 				return;
 			}
 			semaphore.acquire(1);
-			OffsetDateTime start = OffsetDateTime.now();
-			Invocation inv = build(invoker.get());
-			String name = Clients.getName(invoker.get());
+			Invocation inv = build(invoker);
+			String name = Clients.getName(invoker);
 			TrafficControlRequest req = new TrafficControlRequest(
 				0,
 				shard,
@@ -70,20 +69,17 @@ public class Barrel implements Runnable {
 					log.info("TIMEOUT!");
 				}
 			}, 50, TimeUnit.MILLISECONDS);
-			invoker.get().invoke(inv)
+			invoker.invoke(inv)
 				.whenCompleteWithContext((r, t) -> {
 					if (released.compareAndSet(false, true)) {
 						semaphore.release(1);
 					}
-					OffsetDateTime end = OffsetDateTime.now();
 					if (t == null) {
 						long avg = 0;
 						Object avgRaw = r.getObjectAttachment(Constants.RESP_HEADER_KEY_AVG_COST_MILLIS);
 						if (avgRaw != null) {
 							avg = (long) avgRaw;
 						}
-						log.info("{} API COST: {} (AVG {})", name,
-							end.toInstant().toEpochMilli() - start.toInstant().toEpochMilli(), avg);
 						registry.setAvg(shard, avg);
 						TrafficControlResult.CraftResult[] craftResults = TrafficControlResult.parseResponses(r);
 						for (TrafficControlResult.CraftResult result : craftResults) {

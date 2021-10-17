@@ -113,13 +113,10 @@ public class TestServerFilter implements Filter, BaseFilter.Listener {
 				}
 				doInvoke(invoker, invocation, recallIdx, recallCount, dones);
 			}
-			long endRecall = System.currentTimeMillis();
 
 			int maxDequeue = 200;
-			long startDequeue = System.currentTimeMillis();
 			List<DigestWithResponse> doneRecalls = new LinkedList<>();
-			int dequeueCount = outputQueue.drainTo(doneRecalls, maxDequeue);
-			long endDequeue = System.currentTimeMillis();
+			outputQueue.drainTo(doneRecalls, maxDequeue);
 			doneRecalls.stream().forEach(digestWithResponse -> {
 				tcResult.append(
 					digestWithResponse.getSeq(),
@@ -183,9 +180,6 @@ public class TestServerFilter implements Filter, BaseFilter.Listener {
 	@Override
 	public void onResponse(Result appResponse, Invoker<?> invoker, Invocation invocation) {
 		// 获取内存信息样例
-		SystemInfo si = new SystemInfo();
-		HardwareAbstractionLayer hal = si.getHardware();
-		GlobalMemory memory = hal.getMemory();
 	}
 
 	@Override

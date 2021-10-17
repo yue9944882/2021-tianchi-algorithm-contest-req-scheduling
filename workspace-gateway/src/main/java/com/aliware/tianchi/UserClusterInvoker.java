@@ -35,7 +35,7 @@ public class UserClusterInvoker<T> extends AbstractClusterInvoker<T> {
 	@Override
 	protected Result doInvoke(Invocation invocation, List<Invoker<T>> invokers, LoadBalance loadbalance) throws RpcException {
 		OffsetDateTime start = OffsetDateTime.now();
-		Request req = Gatlin.getInstance().getWindow().start(invocation, start);
+		Request req = Gatlin.getInstance().getWindow().start(invocation);
 		RpcResponse response = new RpcResponse(start, req);
 		Gatlin.getInstance().schedule(req.getSeq(), response);
 		return response;

@@ -2,9 +2,6 @@ package io.yue9944882.flowcontrol.window;
 
 import java.time.OffsetDateTime;
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -23,23 +20,29 @@ public class Window {
 	private static final Logger log = LoggerFactory.getLogger(Window.class);
 
 	public Window() {
-		this.lock = new ReentrantReadWriteLock();
-		this.tracking = new TreeMap<>(Integer::compare);
+		this.lockMod = 600;
+		this.locks = new ReadWriteLock[lockMod];
+		this.trackings = new TreeMap[lockMod];
+		for (int i = 0; i < lockMod; i++) {
+			this.locks[i] = new ReentrantReadWriteLock();
+			this.trackings[i] = new TreeMap<>();
+		}
 	}
 
 	private static final AtomicInteger serial = new AtomicInteger();
-	private final TreeMap<Integer, Digest> tracking;
-	private final ReadWriteLock lock;
+	private final int lockMod;
+	private final ReadWriteLock[] locks;
+	private final TreeMap<Integer, Digest>[] trackings;
 	private final AtomicBoolean ready = new AtomicBoolean(false);
 
-	public Request start(Invocation inv, OffsetDateTime start) {
+	public Request start(Invocation inv) {
 		int seq = serial.incrementAndGet();
 		RpcRequest req = new RpcRequest(seq, inv);
 		Digest digest = new Digest(seq, req.getInput());
 
-		this.lock.writeLock().lock();
-		this.tracking.put(digest.getSeq(), digest);
-		this.lock.writeLock().unlock();
+		this.locks[seq % lockMod].writeLock().lock();
+		this.trackings[seq % lockMod].put(digest.getSeq(), digest);
+		this.locks[seq % lockMod].writeLock().unlock();
 
 		synchronized (this) {
 			ready.set(true);
@@ -49,33 +52,22 @@ public class Window {
 	}
 
 	public void finish(int seq, String reason) {
-		this.lock.writeLock().lock();
-		this.tracking.remove(seq);
-		this.lock.writeLock().unlock();
-	}
-
-	public Digest getDigestOrNull(int seq) {
-		this.lock.readLock().lock();
-		try {
-			return this.tracking.get(seq);
-		}
-		finally {
-			this.lock.readLock().unlock();
-		}
+		this.locks[seq % lockMod].writeLock().lock();
+		this.trackings[seq % lockMod].remove(seq);
+		this.locks[seq % lockMod].writeLock().unlock();
 	}
 
 	public Snapshot emptySnapshot() {
-		this.lock.readLock().lock();
-		try {
-			Set<Integer> pending = new HashSet<>(this.tracking.keySet());
-			Snapshot snapshot = new Snapshot(
-				false,
-				new TreeMap<>(this.tracking));
-			return snapshot;
+		TreeMap<Integer, Digest> items = new TreeMap<>();
+		for (int i = 0; i < lockMod; i++) {
+			this.locks[i].readLock().lock();
+			this.trackings[i].forEach(items::put);
+			this.locks[i].readLock().unlock();
 		}
-		finally {
-			this.lock.readLock().unlock();
-		}
+		Snapshot snapshot = new Snapshot(
+			false,
+			items);
+		return snapshot;
 	}
 
 	public void waitUntilReady() {

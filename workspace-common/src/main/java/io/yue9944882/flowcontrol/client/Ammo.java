@@ -54,12 +54,10 @@ public class Ammo {
 					Map<Integer, BucketShard> prevShards = bucket.items.get();
 					Map<Integer, BucketShard> newShards = new HashMap<>();
 					Map<Integer, List<Digest>> scheduled = new HashMap<>();
-					Map<Integer, Integer> thisRoundCount = new HashMap<>();
 					Map<Integer, Long> avgs = new HashMap<>();
 					Map<Integer, Boolean> healthy = new HashMap<>();
 					for (int i = 0; i < mod; i++) {
 						scheduled.putIfAbsent(i, new ArrayList<>());
-						thisRoundCount.putIfAbsent(i, 0);
 						avgs.put(i, 0L);
 						healthy.put(i, prober.isHealthy(i));
 					}
@@ -123,7 +121,6 @@ public class Ammo {
 						int finalMin = min;
 						vts.compute(min, (k, v) -> v + avgs.get(finalMin).intValue());
 						scheduled.get(min).add(unscheduled.get(i));
-						thisRoundCount.compute(min, (k, v) -> v + 1);
 						robinPtr++;
 					}
 
